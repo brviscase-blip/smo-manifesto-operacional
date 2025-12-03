@@ -5,6 +5,8 @@ import {
 } from './types';
 import { 
   fetchNames, 
+  fetchNamesByStatus,
+  fetchNamesForFinalization,
   fetchIdsByStatus, 
   fetchManifestosForEmployee, 
   fetchCIAs,
@@ -57,8 +59,8 @@ const App: React.FC = () => {
 
   const loadIdsFinalization = useCallback(async () => {
     setUpdating(true);
-    // Based on PDF logic: Finalizar Manifesto logic loads names that have 'Manifesto Iniciado'
-    const names = await fetchNames('Manifesto Iniciado');
+    // Based on requested logic: Finalizar Manifesto loads names where Manifesto_Disponivel is NULL and Manifesto_Iniciado is NOT NULL
+    const names = await fetchNamesForFinalization();
     setNamesList(names);
     setTimeout(() => setUpdating(false), 500);
   }, []);
@@ -75,6 +77,7 @@ const App: React.FC = () => {
           if (action === 'Iniciar Manifesto') {
             loadIds();
           } else if (action === 'Finalizar Manifesto') {
+            loadIdsFinalization(); // Refresh the list of employees with active manifestos
             if (name) {
               // Refresh specific employee list if selected
               fetchManifestosForEmployee(name).then(setManifestosForEmployee);
@@ -88,7 +91,6 @@ const App: React.FC = () => {
         (payload) => {
           // If a new employee is added
           if (action === 'Iniciar Manifesto') loadNames();
-          if (action === 'Finalizar Manifesto') loadIdsFinalization();
         }
       )
       .subscribe();

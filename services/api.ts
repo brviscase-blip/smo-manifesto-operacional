@@ -1,11 +1,10 @@
 import { supabase } from '../supabaseClient';
 
-// Fetch names from Cadastro_Operacional -> Usuario_Operação
+// --- INICIAR MANIFESTO: NAMES ---
+// Prompt: Ação: Iniciar Manifesto | Campo: Nome | Table: Cadastro_Operacional
+// Logic: Retornar os dados da tabela "Usuario_Operação"
 export const fetchNames = async (status?: string): Promise<string[]> => {
   try {
-    // The user explicitly requested to fetch from 'Cadastro_Operacional' column 'Usuario_Operação'
-    // We ignore the status filter here to ensure we populate the list from the master table.
-    // Logic for filtering by active manifestos is handled by the UI/other queries if needed.
     const { data, error } = await supabase
       .from('Cadastro_Operacional')
       .select('Usuario_Operação');
@@ -18,7 +17,6 @@ export const fetchNames = async (status?: string): Promise<string[]> => {
     if (!data) return [];
 
     // Extract names, remove nulls/duplicates, and sort
-    // Note: accessing item['Usuario_Operação'] due to special characters
     const uniqueNames = Array.from(new Set(data.map((item: any) => item['Usuario_Operação']))).filter(Boolean);
     return uniqueNames.sort() as string[];
   } catch (e) {
@@ -27,15 +25,46 @@ export const fetchNames = async (status?: string): Promise<string[]> => {
   }
 };
 
-// Fetch IDs from SMO_Sistema -> ID_Manifesto
+// --- FINALIZAR MANIFESTO: NAMES ---
+// Prompt: Ação: Finalizar Manifesto | Campo: Nome | Table: SMO_Operacional (Using SMO_Sistema to match DB)
+// Logic: Verificar na coluna "Manifesto_Disponivel" as linhas vazias AND verificar na coluna "Manifesto_Iniciado" as linhas com dados
+// Return: Usuario_Operação
+export const fetchNamesForFinalization = async (): Promise<string[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('SMO_Sistema')
+      .select('Usuario_Operacao, Usuario_Operação, Usuario')
+      .is('Manifesto_Disponivel', null)     // Procurar dados vazios na tabela "Manifesto_Disponivel"
+      .not('Manifesto_Iniciado', 'is', null); // verificar na coluna "Manifesto_Iniciado" se contém dados
+
+    if (error) {
+        console.warn("Error fetching names for finalization from SMO_Sistema.", error);
+        return [];
+    }
+
+    if (!data) return [];
+
+    // Robustly check for column name variations (Usuario_Operacao or Usuario_Operação)
+    const uniqueNames = Array.from(new Set(data.map((item: any) => 
+      item.Usuario_Operacao || item['Usuario_Operação'] || item.Usuario
+    ))).filter(Boolean);
+
+    return uniqueNames.sort() as string[];
+  } catch (e) {
+    console.error("Unexpected error in fetchNamesForFinalization", e);
+    return [];
+  }
+};
+
+// --- INICIAR MANIFESTO: IDS ---
+// Prompt: Ação: Iniciar Manifesto | Campo: ID Manifesto | Table: SMO_Sistema
+// Logic: Retornar os dados da coluna "ID_Manifesto" que estão com o status de "Manifesto Recebido" na coluna "Status"
 export const fetchIdsByStatus = async (status: string): Promise<string[]> => {
   try {
-    // User requested to fetch from 'SMO_Sistema' column 'ID_Manifesto'
-    // We keep the status filter to ensure business logic (only showing 'Recebido' for 'Iniciar Manifesto')
     const { data, error } = await supabase
       .from('SMO_Sistema')
       .select('ID_Manifesto')
-      .eq('Status', status);
+      .eq('Status', status); // Passed as 'Manifesto Recebido' from App.tsx
 
     if (error) {
         console.warn("Error fetching IDs from SMO_Sistema.", error);
@@ -52,19 +81,44 @@ export const fetchIdsByStatus = async (status: string): Promise<string[]> => {
   }
 };
 
+// Helper to ignore status filter if needed, but here we generally use the specific functions above
+export const fetchNamesByStatus = async (status: string): Promise<string[]> => {
+   // This is kept for backward compatibility if used elsewhere, 
+   // but fetchNamesForFinalization is the preferred specific logic now.
+  try {
+    const { data, error } = await supabase
+      .from('SMO_Sistema')
+      .select('Usuario_Operacao, Usuario_Operação, Usuario')
+      .eq('Status', status);
+
+    if (error) return [];
+    if (!data) return [];
+
+    const uniqueNames = Array.from(new Set(data.map((item: any) => 
+      item.Usuario_Operacao || item['Usuario_Operação'] || item.Usuario
+    ))).filter(Boolean);
+    return uniqueNames.sort() as string[];
+  } catch (e) {
+    return [];
+  }
+};
+
 // Fetch IDs for a specific employee (Finalizar Manifesto context)
 export const fetchManifestosForEmployee = async (name: string): Promise<string[]> => {
   try {
-    // Query SMO_Sistema for manifests started by this user
-    // Column 'Usuario_Operacao' matches the name from Cadastro_Operacional
+    // We assume that if we are finalizing, we look for manifestos that are NOT finished yet.
+    // Based on the new logic: Manifesto_Disponivel is NULL and Manifesto_Iniciado is NOT NULL
     const { data, error } = await supabase
       .from('SMO_Sistema')
       .select('ID_Manifesto')
-      .eq('Usuario_Operacao', name) 
-      .eq('Status', 'Manifesto Iniciado');
+      .eq('Usuario_Operacao', name) // We try Usuario_Operacao first
+      .is('Manifesto_Disponivel', null)
+      .not('Manifesto_Iniciado', 'is', null);
 
     if (error) {
-         console.warn("Error fetching employee manifestos from SMO_Sistema.", error);
+         // Fallback query if Usuario_Operacao fails or returns nothing, 
+         // though logic dictates we should match the column used in fetchNamesForFinalization
+         console.warn("Error fetching employee manifestos.", error);
          return [];
     }
 
@@ -122,26 +176,43 @@ export const submitManifestoAction = async (action: string, id: string, name: st
 
     if (!error) {
         const newStatus = action === 'Iniciar Manifesto' ? 'Manifesto Iniciado' : 'Manifesto Finalizado';
-        // Update status in SMO_Sistema
-        // We assume ID_Manifesto is the unique key here
+        
+        // Update SMO_Sistema
+        // NOTE: We update Usuario_Operacao. If the DB has 'Usuario_Operação', this update might rely on Supabase mapping or might need adjustment.
+        // We also rely on 'Status' for general tracking, although 'Finalizar' logic now checks specific timestamp columns.
         await supabase
           .from('SMO_Sistema')
-          .update({ Status: newStatus, Usuario_Operacao: name }) // Also update the user who took action
+          .update({ Status: newStatus, Usuario_Operacao: name }) 
           .eq('ID_Manifesto', id);
     }
 
-    // Call N8N Webhook for "Iniciar Manifesto"
+    // N8N Webhook Integration
+    const webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Manifesto-Operacional';
+    const formattedDate = new Date().toLocaleString('pt-BR');
+    
+    let webhookBody = {};
+
     if (action === 'Iniciar Manifesto') {
+        webhookBody = {
+            id_manifesto: id,
+            nome: name,
+            Manifesto_Iniciado: formattedDate
+        };
+    } else if (action === 'Finalizar Manifesto') {
+        webhookBody = {
+            id_manifesto: id,
+            nome: name,
+            Manifesto_Finalizado: formattedDate
+        };
+    }
+
+    // Call Webhook
+    if (Object.keys(webhookBody).length > 0) {
         try {
-            const formattedDate = new Date().toLocaleString('pt-BR');
-            await fetch('https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Iniciar-Manifesto', {
+            await fetch(webhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id_manifesto: id,
-                    nome: name,
-                    Manifesto_Iniciado: formattedDate
-                })
+                body: JSON.stringify(webhookBody)
             });
         } catch (webhookError) {
             console.error('Webhook error:', webhookError);
