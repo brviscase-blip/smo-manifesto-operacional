@@ -187,7 +187,12 @@ export const submitManifestoAction = async (action: string, id: string, name: st
     }
 
     // N8N Webhook Integration
-    const webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Manifesto-Operacional';
+    let webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Manifesto-Operacional';
+
+    if (action === 'Iniciar Manifesto') {
+      webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Iniciar-Manifesto';
+    }
+
     const formattedDate = new Date().toLocaleString('pt-BR');
     
     let webhookBody = {};
