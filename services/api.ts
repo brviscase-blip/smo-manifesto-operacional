@@ -170,9 +170,9 @@ export const submitManifestoAction = async (
 
     // Explicitly using the URLs provided
     if (action === 'Iniciar Manifesto') {
-      webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Iniciar-Manifesto';
+      webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Manifesto-Operacional';
     } else if (action === 'Finalizar Manifesto') {
-      webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Iniciar-Manifesto';
+      webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Manifesto-Operacional';
     } else {
       // Fallback
       webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Manifesto-Operacional';
