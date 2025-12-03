@@ -42,14 +42,14 @@ const App: React.FC = () => {
   // --- Data Loading Functions ---
 
   const loadNames = useCallback(async () => {
-    // For "Iniciar Puxe", we likely want all names or active employees
+    // For "Iniciar Manifesto", we likely want all names or active employees
     const names = await fetchNames();
     setNamesList(names);
   }, []);
 
   const loadIds = useCallback(async () => {
     setUpdating(true);
-    // Based on PDF logic: Iniciar Puxe needs "Manifesto Recebido"
+    // Based on PDF logic: Iniciar Manifesto needs "Manifesto Recebido"
     const ids = await fetchIdsByStatus('Manifesto Recebido');
     setIdsList(ids);
     setTimeout(() => setUpdating(false), 500); // Visual delay for spinner
@@ -57,7 +57,7 @@ const App: React.FC = () => {
 
   const loadIdsFinalization = useCallback(async () => {
     setUpdating(true);
-    // Based on PDF logic: Finalizar Puxe logic loads names that have 'Manifesto Iniciado'
+    // Based on PDF logic: Finalizar Manifesto logic loads names that have 'Manifesto Iniciado'
     const names = await fetchNames('Manifesto Iniciado');
     setNamesList(names);
     setTimeout(() => setUpdating(false), 500);
@@ -72,9 +72,9 @@ const App: React.FC = () => {
         { event: '*', schema: 'public', table: 'SMO_Sistema' },
         (payload) => {
           // If SMO_Sistema changes (new manifesto or status change), refresh relevant lists
-          if (action === 'Iniciar Puxe') {
+          if (action === 'Iniciar Manifesto') {
             loadIds();
-          } else if (action === 'Finalizar Puxe') {
+          } else if (action === 'Finalizar Manifesto') {
             if (name) {
               // Refresh specific employee list if selected
               fetchManifestosForEmployee(name).then(setManifestosForEmployee);
@@ -87,8 +87,8 @@ const App: React.FC = () => {
         { event: '*', schema: 'public', table: 'Cadastro_Operacional' },
         (payload) => {
           // If a new employee is added
-          if (action === 'Iniciar Puxe') loadNames();
-          if (action === 'Finalizar Puxe') loadIdsFinalization();
+          if (action === 'Iniciar Manifesto') loadNames();
+          if (action === 'Finalizar Manifesto') loadIdsFinalization();
         }
       )
       .subscribe();
@@ -107,10 +107,10 @@ const App: React.FC = () => {
     setSelectedManifestoId('');
     setManifestosForEmployee([]);
 
-    if (action === 'Iniciar Puxe') {
+    if (action === 'Iniciar Manifesto') {
       loadNames();
       loadIds();
-    } else if (action === 'Finalizar Puxe') {
+    } else if (action === 'Finalizar Manifesto') {
       loadIdsFinalization(); // Loads specific names for finalization
     }
   }, [action, loadNames, loadIds, loadIdsFinalization]);
@@ -118,19 +118,19 @@ const App: React.FC = () => {
   // Handle Refresh Click
   const handleRefresh = () => {
     if (updating) return;
-    if (action === 'Iniciar Puxe') {
+    if (action === 'Iniciar Manifesto') {
       loadIds();
       loadNames();
-    } else if (action === 'Finalizar Puxe') {
+    } else if (action === 'Finalizar Manifesto') {
       loadIdsFinalization();
     }
   };
 
-  // Handle Name Selection (Finalizar Puxe)
+  // Handle Name Selection (Finalizar Manifesto)
   const handleNameChange = async (val: string) => {
     setName(val);
     setSelectedManifestoId('');
-    if (action === 'Finalizar Puxe' && val) {
+    if (action === 'Finalizar Manifesto' && val) {
       const manifests = await fetchManifestosForEmployee(val);
       setManifestosForEmployee(manifests);
     } else {
@@ -144,16 +144,16 @@ const App: React.FC = () => {
 
     // Validation
     if (!action) return;
-    if (action === 'Iniciar Puxe' && (!name || !selectedManifestoId)) {
+    if (action === 'Iniciar Manifesto' && (!name || !selectedManifestoId)) {
       setFeedback({ text: 'Preencha todos os campos.', type: 'error' });
       return;
     }
-    if (action === 'Finalizar Puxe' && (!name || !selectedManifestoId)) {
+    if (action === 'Finalizar Manifesto' && (!name || !selectedManifestoId)) {
       setFeedback({ text: 'Preencha todos os campos.', type: 'error' });
       return;
     }
     // Strict name check only if list is populated and not empty
-    if (action === 'Iniciar Puxe' && namesList.length > 0 && !namesList.some(n => n.toLowerCase() === name.toLowerCase())) {
+    if (action === 'Iniciar Manifesto' && namesList.length > 0 && !namesList.some(n => n.toLowerCase() === name.toLowerCase())) {
         setFeedback({ text: 'Por favor, escolha um nome válido da lista.', type: 'error' });
         return;
     }
@@ -179,7 +179,7 @@ const App: React.FC = () => {
         setLastSubmission(submissionKey);
         
         // Reset specific fields
-        if (action === 'Finalizar Puxe') {
+        if (action === 'Finalizar Manifesto') {
            // Remove the finalized manifesto from the list visually
            setManifestosForEmployee(prev => prev.filter(id => id !== selectedManifestoId));
            setSelectedManifestoId('');
@@ -203,7 +203,7 @@ const App: React.FC = () => {
     <div className="container relative z-20 bg-white p-[30px] px-[25px] rounded-[20px] shadow-[0_10px_30px_rgba(0,0,0,0.15)] w-full max-w-[420px] text-center animate-fadeIn mx-4">
       
       <h2 className="text-[#ee2536] text-[22px] font-bold mb-[25px]">
-        Controle de Manifesto Operacional
+        SMO - Manifesto Operacional
       </h2>
 
       {/* Action Selection */}
@@ -213,7 +213,7 @@ const App: React.FC = () => {
       <div className="flex gap-2 items-start">
         <div className="flex-1">
             <CustomSelect 
-                options={['Iniciar Puxe', 'Finalizar Puxe']}
+                options={['Iniciar Manifesto', 'Finalizar Manifesto']}
                 value={action}
                 onChange={(val) => setAction(val as ActionType)}
                 placeholder="Selecione"
@@ -234,8 +234,8 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* -------------------- INICIAR PUXE VIEW -------------------- */}
-      {action === 'Iniciar Puxe' && (
+      {/* -------------------- INICIAR MANIFESTO VIEW -------------------- */}
+      {action === 'Iniciar Manifesto' && (
         <div className="animate-fadeIn">
             {/* Name Input */}
             <div className="mt-[15px]">
@@ -249,25 +249,45 @@ const App: React.FC = () => {
                 />
             </div>
 
-            {/* Code Select */}
+            {/* ID Manifesto List */}
             <div className="mt-[15px]">
-                <label htmlFor="codigo" className="block mb-[5px] font-bold text-[#444] text-[14px] text-left">Código de Rastreio (ID)</label>
-                <CustomSelect 
-                    options={idsList}
-                    value={selectedManifestoId}
-                    onChange={setSelectedManifestoId}
-                    placeholder="Selecione"
-                />
+                <label className="block mb-[5px] font-bold text-[#444] text-[14px] text-left">ID Manifesto</label>
+                <div className="max-h-[200px] overflow-y-auto custom-scrollbar bg-[#f8f9fa] border border-[#dee2e6] rounded-[12px] p-[10px]">
+                     {idsList.length === 0 ? (
+                        <div className="text-[#6c757d] italic text-center p-[20px] text-[13px]">
+                            Nenhum manifesto disponível
+                        </div>
+                     ) : (
+                         idsList.map(id => (
+                            <button
+                                key={id}
+                                onClick={() => setSelectedManifestoId(id)}
+                                className={`w-full flex justify-between items-center p-[12px] my-[6px] border rounded-[10px] text-[13px] text-left font-medium relative transition-all duration-200 cursor-pointer 
+                                    ${selectedManifestoId === id 
+                                        ? 'bg-gradient-to-r from-[#ee2536] to-[#ff6f61] text-white border-transparent shadow-md transform scale-[1.02]' 
+                                        : 'bg-white text-[#495057] border-[#e9ecef] hover:bg-[#fff0f1] hover:border-[#ffcdd2]'
+                                    }`}
+                            >
+                                <span className="font-bold">{id}</span>
+                                {selectedManifestoId === id && (
+                                    <span className="bg-white/25 text-white text-[10px] uppercase font-bold px-[8px] py-[2px] rounded-[6px] border border-white/40 tracking-wide">
+                                        Iniciar
+                                    </span>
+                                )}
+                            </button>
+                         ))
+                     )}
+                </div>
             </div>
         </div>
       )}
 
-      {/* -------------------- FINALIZAR PUXE VIEW -------------------- */}
-      {action === 'Finalizar Puxe' && (
+      {/* -------------------- FINALIZAR MANIFESTO VIEW -------------------- */}
+      {action === 'Finalizar Manifesto' && (
         <div className="animate-fadeIn">
             {/* Employee Name Select */}
             <div className="mt-[15px]">
-                <label htmlFor="nomeFinalizacao" className="block mb-[5px] font-bold text-[#444] text-[14px] text-left">Nome do Funcionário</label>
+                <label htmlFor="nomeFinalizacao" className="block mb-[5px] font-bold text-[#444] text-[14px] text-left">Nome</label>
                 <CustomSelect 
                     options={namesList}
                     value={name}
@@ -322,7 +342,7 @@ const App: React.FC = () => {
             disabled={loading}
             className={`w-full p-[14px] mt-[25px] bg-gradient-to-br from-[#ee2536] to-[#ff6f61] text-white font-bold text-[16px] border-none rounded-[12px] cursor-pointer transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed hover:scale-[1.03] hover:shadow-[0_5px_15px_rgba(238,37,54,0.4)]`}
         >
-            {loading ? 'Processando...' : 'Enviar'}
+            {loading ? 'Processando...' : (action === 'Iniciar Manifesto' ? 'Iniciar' : 'Finalizar')}
         </button>
       )}
 

@@ -31,7 +31,7 @@ export const fetchNames = async (status?: string): Promise<string[]> => {
 export const fetchIdsByStatus = async (status: string): Promise<string[]> => {
   try {
     // User requested to fetch from 'SMO_Sistema' column 'ID_Manifesto'
-    // We keep the status filter to ensure business logic (only showing 'Recebido' for 'Iniciar Puxe')
+    // We keep the status filter to ensure business logic (only showing 'Recebido' for 'Iniciar Manifesto')
     const { data, error } = await supabase
       .from('SMO_Sistema')
       .select('ID_Manifesto')
@@ -52,7 +52,7 @@ export const fetchIdsByStatus = async (status: string): Promise<string[]> => {
   }
 };
 
-// Fetch IDs for a specific employee (Finalizar Puxe context)
+// Fetch IDs for a specific employee (Finalizar Manifesto context)
 export const fetchManifestosForEmployee = async (name: string): Promise<string[]> => {
   try {
     // Query SMO_Sistema for manifests started by this user
@@ -121,7 +121,7 @@ export const submitManifestoAction = async (action: string, id: string, name: st
       ]);
 
     if (!error) {
-        const newStatus = action === 'Iniciar Puxe' ? 'Manifesto Iniciado' : 'Manifesto Finalizado';
+        const newStatus = action === 'Iniciar Manifesto' ? 'Manifesto Iniciado' : 'Manifesto Finalizado';
         // Update status in SMO_Sistema
         // We assume ID_Manifesto is the unique key here
         await supabase
@@ -129,11 +129,29 @@ export const submitManifestoAction = async (action: string, id: string, name: st
           .update({ Status: newStatus, Usuario_Operacao: name }) // Also update the user who took action
           .eq('ID_Manifesto', id);
     }
+
+    // Call N8N Webhook for "Iniciar Manifesto"
+    if (action === 'Iniciar Manifesto') {
+        try {
+            const formattedDate = new Date().toLocaleString('pt-BR');
+            await fetch('https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Iniciar-Manifesto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id_manifesto: id,
+                    nome: name,
+                    Manifesto_Iniciado: formattedDate
+                })
+            });
+        } catch (webhookError) {
+            console.error('Webhook error:', webhookError);
+        }
+    }
     
-    if (action === 'Iniciar Puxe') {
-        return { success: true, message: 'Puxe registrado com sucesso!' };
-    } else if (action === 'Finalizar Puxe') {
-        return { success: true, message: 'Obrigado, puxe concluído!' };
+    if (action === 'Iniciar Manifesto') {
+        return { success: true, message: 'Manifesto iniciado com sucesso!' };
+    } else if (action === 'Finalizar Manifesto') {
+        return { success: true, message: 'Manifesto finalizado com sucesso!' };
     } else {
         return { success: true, message: 'Registro salvo com sucesso!' };
     }

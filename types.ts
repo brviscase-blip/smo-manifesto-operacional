@@ -5,7 +5,7 @@ export interface Manifesto {
   cia?: string;
 }
 
-export type ActionType = '' | 'Iniciar Puxe' | 'Finalizar Puxe';
+export type ActionType = '' | 'Iniciar Manifesto' | 'Finalizar Manifesto';
 
 export interface FeedbackMessage {
   text: string;

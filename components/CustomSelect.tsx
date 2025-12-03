@@ -59,7 +59,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     <div className="relative w-full text-left font-sans" ref={wrapperRef}>
       {/* Trigger Area */}
       <div 
-        className={`w-full p-[12px] mt-[5px] border rounded-[12px] text-[14px] bg-[#fdfdfd] shadow-sm flex items-center justify-between transition-all duration-300 ${disabled ? 'opacity-60 cursor-not-allowed border-[#eee]' : 'cursor-pointer border-[#ccc] hover:border-[#aaa]'} ${isOpen ? 'border-[#ee2536] ring-1 ring-[#ee2536] ring-opacity-30' : ''}`}
+        className={`w-full p-[12px] mt-[5px] border rounded-[12px] text-[14px] bg-[#f0f2f5] shadow-sm flex items-center justify-between transition-all duration-300 ${disabled ? 'opacity-60 cursor-not-allowed border-[#e2e8f0]' : 'cursor-pointer border-[#cbd5e1] hover:border-[#94a3b8]'} ${isOpen ? 'border-[#ee2536] ring-1 ring-[#ee2536] ring-opacity-30' : ''}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
         {searchable ? (
