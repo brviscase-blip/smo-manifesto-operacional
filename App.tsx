@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ActionType, 
@@ -228,24 +227,22 @@ const App: React.FC = () => {
       setLoading(false);
       
       if (result.success) {
-        setFeedback({ text: result.message, type: 'success' });
         setLastSubmission(submissionKey);
-        
-        // Reset specific fields
-        if (action === 'Finalizar Manifesto') {
-           // Remove the finalized manifesto from the list visually
-           setManifestosForEmployee(prev => prev.filter(id => id !== selectedManifestoId));
-           setSelectedManifestoId('');
-           setCompletionType('');
-        } else {
-           setSelectedManifestoId('');
-           setName('');
-           // Refresh IDs to remove the one just pulled
-           loadIds();
-        }
 
-        // Auto hide success message
-        setTimeout(() => setFeedback({text: '', type: ''}), 3000);
+        // Reset App State to Initial (Home)
+        setAction('');
+        setName('');
+        setSelectedManifestoId('');
+        setCompletionType('');
+        setManifestosForEmployee([]);
+        setCurrentLoads({ inh: 0, iz: 0 });
+
+        // Show feedback AFTER state reset to avoid useEffect clearing it
+        setTimeout(() => {
+            setFeedback({ text: result.message, type: 'success' });
+            // Auto hide success message
+            setTimeout(() => setFeedback({text: '', type: ''}), 4000);
+        }, 100);
 
       } else {
         setFeedback({ text: result.message, type: 'error' });

@@ -166,13 +166,16 @@ export const submitManifestoAction = async (
     }
 
     // 3. Webhook Integration
-    let webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Manifesto-Operacional';
+    let webhookUrl = '';
 
+    // Explicitly using the URLs provided
     if (action === 'Iniciar Manifesto') {
       webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Iniciar-Manifesto';
     } else if (action === 'Finalizar Manifesto') {
-      // Usando o webhook solicitado explicitamente pelo usuário
       webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Iniciar-Manifesto';
+    } else {
+      // Fallback
+      webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Manifesto-Operacional';
     }
 
     const formattedDate = new Date().toLocaleString('pt-BR');
