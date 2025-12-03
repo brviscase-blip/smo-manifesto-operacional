@@ -26,16 +26,15 @@ export const fetchNames = async (status?: string): Promise<string[]> => {
 };
 
 // --- FINALIZAR MANIFESTO: NAMES ---
-// Prompt: Ação: Finalizar Manifesto | Campo: Nome | Table: SMO_Operacional (Using SMO_Sistema to match DB)
-// Logic: Verificar na coluna "Manifesto_Disponivel" as linhas vazias AND verificar na coluna "Manifesto_Iniciado" as linhas com dados
-// Return: Usuario_Operação
+// Prompt: Ação: Finalizar Manifesto | Campo: Nome | Table: SMO_Sistema
+// Logic: =SE([@Status]="Manifesto Iniciado";[@[Usuario_Operação]];"")
+// CORREÇÃO: Usando .ilike para ignorar espaços em branco (ex: "  Manifesto Iniciado") que existem no banco.
 export const fetchNamesForFinalization = async (): Promise<string[]> => {
   try {
     const { data, error } = await supabase
       .from('SMO_Sistema')
-      .select('Usuario_Operacao, Usuario_Operação, Usuario')
-      .is('Manifesto_Disponivel', null)     // Procurar dados vazios na tabela "Manifesto_Disponivel"
-      .not('Manifesto_Iniciado', 'is', null); // verificar na coluna "Manifesto_Iniciado" se contém dados
+      .select('Usuario_Operação')
+      .ilike('Status', '%Manifesto Iniciado%');
 
     if (error) {
         console.warn("Error fetching names for finalization from SMO_Sistema.", error);
@@ -44,10 +43,7 @@ export const fetchNamesForFinalization = async (): Promise<string[]> => {
 
     if (!data) return [];
 
-    // Robustly check for column name variations (Usuario_Operacao or Usuario_Operação)
-    const uniqueNames = Array.from(new Set(data.map((item: any) => 
-      item.Usuario_Operacao || item['Usuario_Operação'] || item.Usuario
-    ))).filter(Boolean);
+    const uniqueNames = Array.from(new Set(data.map((item: any) => item['Usuario_Operação']))).filter(Boolean);
 
     return uniqueNames.sort() as string[];
   } catch (e) {
@@ -58,13 +54,13 @@ export const fetchNamesForFinalization = async (): Promise<string[]> => {
 
 // --- INICIAR MANIFESTO: IDS ---
 // Prompt: Ação: Iniciar Manifesto | Campo: ID Manifesto | Table: SMO_Sistema
-// Logic: Retornar os dados da coluna "ID_Manifesto" que estão com o status de "Manifesto Recebido" na coluna "Status"
+// Logic: Retornar os dados da coluna "ID_Manifesto" que estão com o status de "Manifesto Recebido"
 export const fetchIdsByStatus = async (status: string): Promise<string[]> => {
   try {
     const { data, error } = await supabase
       .from('SMO_Sistema')
       .select('ID_Manifesto')
-      .eq('Status', status); // Passed as 'Manifesto Recebido' from App.tsx
+      .eq('Status', status); // Expecting 'Manifesto Recebido'
 
     if (error) {
         console.warn("Error fetching IDs from SMO_Sistema.", error);
@@ -81,43 +77,17 @@ export const fetchIdsByStatus = async (status: string): Promise<string[]> => {
   }
 };
 
-// Helper to ignore status filter if needed, but here we generally use the specific functions above
-export const fetchNamesByStatus = async (status: string): Promise<string[]> => {
-   // This is kept for backward compatibility if used elsewhere, 
-   // but fetchNamesForFinalization is the preferred specific logic now.
-  try {
-    const { data, error } = await supabase
-      .from('SMO_Sistema')
-      .select('Usuario_Operacao, Usuario_Operação, Usuario')
-      .eq('Status', status);
-
-    if (error) return [];
-    if (!data) return [];
-
-    const uniqueNames = Array.from(new Set(data.map((item: any) => 
-      item.Usuario_Operacao || item['Usuario_Operação'] || item.Usuario
-    ))).filter(Boolean);
-    return uniqueNames.sort() as string[];
-  } catch (e) {
-    return [];
-  }
-};
-
 // Fetch IDs for a specific employee (Finalizar Manifesto context)
+// Logic: Filter by Name AND Status='Manifesto Iniciado' (ignoring spaces)
 export const fetchManifestosForEmployee = async (name: string): Promise<string[]> => {
   try {
-    // We assume that if we are finalizing, we look for manifestos that are NOT finished yet.
-    // Based on the new logic: Manifesto_Disponivel is NULL and Manifesto_Iniciado is NOT NULL
     const { data, error } = await supabase
       .from('SMO_Sistema')
       .select('ID_Manifesto')
-      .eq('Usuario_Operacao', name) // We try Usuario_Operacao first
-      .is('Manifesto_Disponivel', null)
-      .not('Manifesto_Iniciado', 'is', null);
+      .eq('Usuario_Operação', name)
+      .ilike('Status', '%Manifesto Iniciado%'); // .ilike corrige a falha de leitura por espaços extras
 
     if (error) {
-         // Fallback query if Usuario_Operacao fails or returns nothing, 
-         // though logic dictates we should match the column used in fetchNamesForFinalization
          console.warn("Error fetching employee manifestos.", error);
          return [];
     }
@@ -130,39 +100,47 @@ export const fetchManifestosForEmployee = async (name: string): Promise<string[]
   }
 };
 
-export const fetchCIAs = async (): Promise<string[]> => {
+// --- FETCH MANIFESTO LOADS (Cargas) ---
+// Used for Partial/Complete finalization logic
+export const fetchManifestoLoads = async (id: string): Promise<{ inh: number; iz: number }> => {
   try {
     const { data, error } = await supabase
       .from('SMO_Sistema')
-      .select('CIA')
-      .neq('CIA', null);
+      .select('"Cargas_(IN/H)", "Cargas_(IZ)"')
+      .eq('ID_Manifesto', id)
+      .single();
 
-    if (error) return ['CIA A', 'CIA B', 'CIA C'];
-    
-    const uniqueCias = Array.from(new Set((data || []).map((item: any) => item.CIA)));
-    return uniqueCias.sort() as string[];
+    if (error) {
+      console.warn("Error fetching manifesto loads.", error);
+      return { inh: 0, iz: 0 };
+    }
+
+    if (!data) return { inh: 0, iz: 0 };
+
+    return {
+      inh: Number(data['Cargas_(IN/H)']) || 0,
+      iz: Number(data['Cargas_(IZ)']) || 0
+    };
   } catch (e) {
-    return [];
+    console.error("Unexpected error in fetchManifestoLoads", e);
+    return { inh: 0, iz: 0 };
   }
 };
 
-export const fetchManifestosByCIA = async (cia: string): Promise<string[]> => {
-   try {
-    const { data, error } = await supabase
-      .from('SMO_Sistema')
-      .select('ID_Manifesto')
-      .eq('CIA', cia);
+// --- HELPER FUNCTIONS (UNUSED IN LOGIC BUT KEPT FOR STRUCTURE IF NEEDED) ---
+export const fetchCIAs = async (): Promise<string[]> => { return []; };
+export const fetchManifestosByCIA = async (cia: string): Promise<string[]> => { return []; };
+export const fetchNamesByStatus = async (status: string): Promise<string[]> => { return []; };
 
-    if (error) return [];
-    return (data || []).map((item: any) => item.ID_Manifesto);
-   } catch (e) {
-     return [];
-   }
-};
-
-export const submitManifestoAction = async (action: string, id: string, name: string): Promise<{ success: boolean; message: string }> => {
+// --- SUBMIT ACTION ---
+export const submitManifestoAction = async (
+  action: string, 
+  id: string, 
+  name: string,
+  extraData?: { type: 'Completo' | 'Parcial'; inh: number; iz: number }
+): Promise<{ success: boolean; message: string }> => {
   try {
-    // Insert into registros_operacionais
+    // 1. Insert Log
     const { error } = await supabase
       .from('registros_operacionais')
       .insert([
@@ -174,28 +152,31 @@ export const submitManifestoAction = async (action: string, id: string, name: st
         }
       ]);
 
+    // 2. Update SMO_Sistema Status
     if (!error) {
         const newStatus = action === 'Iniciar Manifesto' ? 'Manifesto Iniciado' : 'Manifesto Finalizado';
         
-        // Update SMO_Sistema
-        // NOTE: We update Usuario_Operacao. If the DB has 'Usuario_Operação', this update might rely on Supabase mapping or might need adjustment.
-        // We also rely on 'Status' for general tracking, although 'Finalizar' logic now checks specific timestamp columns.
         await supabase
           .from('SMO_Sistema')
-          .update({ Status: newStatus, Usuario_Operacao: name }) 
+          .update({ 
+              Status: newStatus, 
+              "Usuario_Operação": name 
+          }) 
           .eq('ID_Manifesto', id);
     }
 
-    // N8N Webhook Integration
+    // 3. Webhook Integration
     let webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Manifesto-Operacional';
 
     if (action === 'Iniciar Manifesto') {
       webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Iniciar-Manifesto';
+    } else if (action === 'Finalizar Manifesto') {
+      // Usando o webhook solicitado explicitamente pelo usuário
+      webhookUrl = 'https://projeto-teste-n8n.ly7t0m.easypanel.host/webhook/Iniciar-Manifesto';
     }
 
     const formattedDate = new Date().toLocaleString('pt-BR');
-    
-    let webhookBody = {};
+    let webhookBody: any = {};
 
     if (action === 'Iniciar Manifesto') {
         webhookBody = {
@@ -207,11 +188,14 @@ export const submitManifestoAction = async (action: string, id: string, name: st
         webhookBody = {
             id_manifesto: id,
             nome: name,
-            Manifesto_Finalizado: formattedDate
+            Manifesto_Finalizado: formattedDate,
+            // Include extra data if available
+            Tipo_Baixa: extraData?.type || 'Completo',
+            Cargas_INH_Entregue: extraData?.inh ?? 0,
+            Cargas_IZ_Entregue: extraData?.iz ?? 0
         };
     }
 
-    // Call Webhook
     if (Object.keys(webhookBody).length > 0) {
         try {
             await fetch(webhookUrl, {

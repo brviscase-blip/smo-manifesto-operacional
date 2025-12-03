@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   ActionType, 
@@ -9,6 +10,7 @@ import {
   fetchNamesForFinalization,
   fetchIdsByStatus, 
   fetchManifestosForEmployee, 
+  fetchManifestoLoads,
   fetchCIAs,
   submitManifestoAction
 } from './services/api';
@@ -29,6 +31,11 @@ const App: React.FC = () => {
   const [name, setName] = useState<string>('');
   const [selectedManifestoId, setSelectedManifestoId] = useState<string>('');
   
+  // Finalization State (Completo/Parcial)
+  const [completionType, setCompletionType] = useState<'Completo' | 'Parcial' | ''>('');
+  const [currentLoads, setCurrentLoads] = useState<{inh: number, iz: number}>({ inh: 0, iz: 0 });
+  const [maxLoads, setMaxLoads] = useState<{inh: number, iz: number}>({ inh: 0, iz: 0 });
+
   // Data Lists
   const [namesList, setNamesList] = useState<string[]>([]);
   const [idsList, setIdsList] = useState<string[]>([]);
@@ -108,6 +115,7 @@ const App: React.FC = () => {
     setName('');
     setSelectedManifestoId('');
     setManifestosForEmployee([]);
+    setCompletionType('');
 
     if (action === 'Iniciar Manifesto') {
       loadNames();
@@ -132,12 +140,27 @@ const App: React.FC = () => {
   const handleNameChange = async (val: string) => {
     setName(val);
     setSelectedManifestoId('');
+    setCompletionType('');
     if (action === 'Finalizar Manifesto' && val) {
       const manifests = await fetchManifestosForEmployee(val);
       setManifestosForEmployee(manifests);
     } else {
       setManifestosForEmployee([]);
     }
+  };
+  
+  // Handle Manifesto ID Selection (trigger load fetch)
+  const handleManifestoSelect = async (id: string) => {
+      setSelectedManifestoId(id);
+      setCompletionType(''); // Reset choice
+      if (action === 'Finalizar Manifesto') {
+          // Fetch loads to set max values and default values
+          setLoading(true); // Short flicker to indicate loading data
+          const loads = await fetchManifestoLoads(id);
+          setMaxLoads(loads);
+          setCurrentLoads(loads); // Default to max for editing
+          setLoading(false);
+      }
   };
 
   // Handle Submission
@@ -150,10 +173,28 @@ const App: React.FC = () => {
       setFeedback({ text: 'Preencha todos os campos.', type: 'error' });
       return;
     }
-    if (action === 'Finalizar Manifesto' && (!name || !selectedManifestoId)) {
-      setFeedback({ text: 'Preencha todos os campos.', type: 'error' });
-      return;
+    if (action === 'Finalizar Manifesto') {
+        if (!name || !selectedManifestoId) {
+            setFeedback({ text: 'Preencha todos os campos.', type: 'error' });
+            return;
+        }
+        if (!completionType) {
+            setFeedback({ text: 'Selecione se está Completo ou Parcial.', type: 'error' });
+            return;
+        }
+        if (completionType === 'Parcial') {
+            // Validation for quantities
+            if (currentLoads.inh < 0 || currentLoads.inh > maxLoads.inh) {
+                 setFeedback({ text: `Cargas (IN/H) inválido. Máximo: ${maxLoads.inh}`, type: 'error' });
+                 return;
+            }
+            if (currentLoads.iz < 0 || currentLoads.iz > maxLoads.iz) {
+                 setFeedback({ text: `Cargas (IZ) inválido. Máximo: ${maxLoads.iz}`, type: 'error' });
+                 return;
+            }
+        }
     }
+
     // Strict name check only if list is populated and not empty
     if (action === 'Iniciar Manifesto' && namesList.length > 0 && !namesList.some(n => n.toLowerCase() === name.toLowerCase())) {
         setFeedback({ text: 'Por favor, escolha um nome válido da lista.', type: 'error' });
@@ -161,7 +202,7 @@ const App: React.FC = () => {
     }
 
     // Duplicate Check
-    const submissionKey = `${action}-${selectedManifestoId}-${name}`;
+    const submissionKey = `${action}-${selectedManifestoId}-${name}-${completionType}-${currentLoads.inh}-${currentLoads.iz}`;
     if (lastSubmission === submissionKey) {
       setFeedback({ text: 'Este registro já foi enviado recentemente!', type: 'error' });
       return;
@@ -172,7 +213,17 @@ const App: React.FC = () => {
 
     // Simulate Network Request
     setTimeout(async () => {
-      const result = await submitManifestoAction(action, selectedManifestoId, name);
+      // Prepare extra data for finalization
+      let extraData = undefined;
+      if (action === 'Finalizar Manifesto') {
+          extraData = {
+              type: completionType as 'Completo' | 'Parcial',
+              inh: currentLoads.inh,
+              iz: currentLoads.iz
+          };
+      }
+
+      const result = await submitManifestoAction(action, selectedManifestoId, name, extraData);
       
       setLoading(false);
       
@@ -185,6 +236,7 @@ const App: React.FC = () => {
            // Remove the finalized manifesto from the list visually
            setManifestosForEmployee(prev => prev.filter(id => id !== selectedManifestoId));
            setSelectedManifestoId('');
+           setCompletionType('');
         } else {
            setSelectedManifestoId('');
            setName('');
@@ -301,11 +353,13 @@ const App: React.FC = () => {
 
             {/* Expanded Manifesto Selection Area */}
             {name && (
-                <div className="mt-[10px] bg-[#f8f9fa] border border-[#dee2e6] rounded-[12px] p-[15px] animate-slideDown">
+                // Changed from bg-[#f8f9fa] to bg-white
+                <div className="mt-[10px] bg-white border border-[#dee2e6] rounded-[12px] p-[15px] animate-slideDown">
                     <label className="block mb-[5px] font-bold text-[#444] text-[14px] text-left">
-                        Código de Rastreio (ID)
+                        ID Manifesto
                     </label>
-                    <div className="max-h-[200px] overflow-y-auto text-left custom-scrollbar">
+                    {/* Added p-[4px] to container to fix clipping issues with hover animations */}
+                    <div className="max-h-[200px] overflow-y-auto overflow-x-hidden text-left custom-scrollbar p-[4px]">
                         {manifestosForEmployee.length === 0 ? (
                             <div className="text-[#6c757d] italic text-center p-[20px] text-[13px]">
                                 Nenhum manifesto encontrado para este funcionário
@@ -318,7 +372,7 @@ const App: React.FC = () => {
                                 {manifestosForEmployee.map(id => (
                                     <button
                                         key={id}
-                                        onClick={() => setSelectedManifestoId(id)}
+                                        onClick={() => handleManifestoSelect(id)}
                                         className={`w-full block p-[10px_12px] my-[6px] border rounded-[8px] text-[13px] text-left font-medium relative transition-all duration-200 cursor-pointer 
                                             ${selectedManifestoId === id 
                                                 ? 'bg-gradient-to-br from-[#ee2536] to-[#ff6f61] text-white border-[#ee2536] shadow-[0_4px_12px_rgba(238,37,54,0.3)] font-bold' 
@@ -331,6 +385,81 @@ const App: React.FC = () => {
                             </>
                         )}
                     </div>
+
+                    {/* Completion Status Selection */}
+                    {selectedManifestoId && (
+                        <div className="mt-[20px] animate-fadeIn border-t border-gray-200 pt-[15px]">
+                            <label className="block mb-[10px] font-bold text-[#444] text-[14px] text-left">
+                                Finalização
+                            </label>
+                            <div className="flex gap-[10px] mb-[15px]">
+                                <button
+                                    onClick={() => setCompletionType('Completo')}
+                                    className={`flex-1 py-[8px] px-[12px] rounded-[8px] text-[13px] font-bold border transition-all ${
+                                        completionType === 'Completo'
+                                        ? 'bg-[#ee2536] text-white border-[#ee2536]'
+                                        : 'bg-white text-[#666] border-[#ddd] hover:bg-[#f5f5f5]'
+                                    }`}
+                                >
+                                    Completo
+                                </button>
+                                <button
+                                    onClick={() => setCompletionType('Parcial')}
+                                    className={`flex-1 py-[8px] px-[12px] rounded-[8px] text-[13px] font-bold border transition-all ${
+                                        completionType === 'Parcial'
+                                        ? 'bg-[#ee2536] text-white border-[#ee2536]'
+                                        : 'bg-white text-[#666] border-[#ddd] hover:bg-[#f5f5f5]'
+                                    }`}
+                                >
+                                    Parcial
+                                </button>
+                            </div>
+
+                            {/* Partial Inputs */}
+                            {completionType === 'Parcial' && (
+                                <div className="grid grid-cols-2 gap-[10px] animate-slideDown">
+                                    <div>
+                                        <label className="block text-[12px] font-bold text-[#666] mb-[4px] text-left">
+                                            Cargas (IN/H)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            min="0"
+                                            max={maxLoads.inh}
+                                            value={currentLoads.inh}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                                if (!isNaN(val) && val >= 0 && val <= maxLoads.inh) {
+                                                    setCurrentLoads(prev => ({...prev, inh: val}));
+                                                }
+                                            }}
+                                            className="w-full p-[8px] border border-[#ccc] rounded-[6px] text-[14px] text-center font-bold text-black focus:border-[#ee2536] outline-none bg-white"
+                                        />
+                                        <div className="text-[10px] text-gray-500 text-right mt-1">Máx: {maxLoads.inh}</div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[12px] font-bold text-[#666] mb-[4px] text-left">
+                                            Cargas (IZ)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            min="0"
+                                            max={maxLoads.iz}
+                                            value={currentLoads.iz}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                                if (!isNaN(val) && val >= 0 && val <= maxLoads.iz) {
+                                                    setCurrentLoads(prev => ({...prev, iz: val}));
+                                                }
+                                            }}
+                                            className="w-full p-[8px] border border-[#ccc] rounded-[6px] text-[14px] text-center font-bold text-black focus:border-[#ee2536] outline-none bg-white"
+                                        />
+                                        <div className="text-[10px] text-gray-500 text-right mt-1">Máx: {maxLoads.iz}</div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
